@@ -16,16 +16,8 @@ from tau_bench.types import Action, SolveResult, RESPOND_ACTION_NAME
 from src.metrics import TokenTracker
 
 
-def _make_dummy_func(name: str, params: dict):
-    """Create a dummy callable for FunctionTool so MAF doesn't complain."""
-    def _func(**kwargs):
-        return ""
-    _func.__name__ = name
-    return _func
-
-
 def _convert_tools(tools_info: List[Dict[str, Any]]) -> List[FunctionTool]:
-    """Convert tau-bench OpenAI-format tools to MAF FunctionTool."""
+    """Convert tau-bench OpenAI-format tools to MAF FunctionTool (declaration only)."""
     tools = []
     for tool in tools_info:
         func = tool["function"]
@@ -33,7 +25,6 @@ def _convert_tools(tools_info: List[Dict[str, Any]]) -> List[FunctionTool]:
             name=func["name"],
             description=func.get("description", ""),
             input_model=func.get("parameters", {}),
-            func=_make_dummy_func(func["name"], func.get("parameters", {})),
         )
         tools.append(ft)
     return tools
@@ -122,9 +113,6 @@ class MAFAgent(Agent):
                 for c in (resp_msg.contents or []):
                     if c.type == "function_call" and func_call_content is None:
                         func_call_content = c
-                    elif c.type == "function_result":
-                        # MAF auto-executed our dummy — skip
-                        continue
                     elif c.type == "text" and c.text and text_content is None:
                         text_content = c
 
