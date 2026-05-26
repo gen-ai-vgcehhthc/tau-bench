@@ -1,4 +1,4 @@
-"""Run TAU Bench with Microsoft Agent Framework (AutoGen) agent."""
+"""Run TAU Bench with Microsoft Agent Framework (MAF) agent."""
 
 import argparse
 import json
@@ -9,10 +9,10 @@ from datetime import datetime
 from tau_bench.envs import get_env
 from tau_bench.types import EnvRunResult
 
-from src.agent import AutoGenAgent
+from src.agent import MAFAgent
 from src.metrics import TaskMetrics, Timer
 
-FRAMEWORK = "autogen"
+FRAMEWORK = "maf"
 
 
 def run_benchmark(
@@ -41,7 +41,7 @@ def run_benchmark(
         task_index=0,
     )
 
-    agent = AutoGenAgent(
+    agent = MAFAgent(
         tools_info=env.tools_info,
         wiki=env.wiki,
         model=model,

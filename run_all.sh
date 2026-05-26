@@ -3,7 +3,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-for fw in langgraph autogen crewai; do
+for fw in langgraph maf crewai; do
     echo ""
     echo "=========================================="
     echo "  Running $fw"

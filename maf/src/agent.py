@@ -39,7 +39,7 @@ def _convert_tools(tools_info: List[Dict[str, Any]]) -> List[FunctionTool]:
     return tools
 
 
-class AutoGenAgent(Agent):
+class MAFAgent(Agent):
     def __init__(
         self,
         tools_info: List[Dict[str, Any]],
