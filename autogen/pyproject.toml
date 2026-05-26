@@ -1,0 +1,14 @@
+[project]
+name = "tau-bench-autogen"
+version = "0.1.0"
+description = "TAU Bench with Microsoft Agent Framework (AutoGen) agent"
+requires-python = ">=3.11"
+dependencies = [
+    "agent-framework>=1.0.0",
+    "openai>=2.38.0",
+    "pandas>=3.0.3",
+    "tau-bench",
+]
+
+[tool.uv.sources]
+tau-bench = { git = "https://github.com/sierra-research/tau-bench.git" }

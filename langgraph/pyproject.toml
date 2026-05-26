@@ -1,0 +1,16 @@
+[project]
+name = "tau-bench-langgraph"
+version = "0.1.0"
+description = "TAU Bench with LangGraph agent"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph>=1.2.1",
+    "langchain-openai>=1.2.2",
+    "langchain-anthropic>=1.4.3",
+    "openai>=2.38.0",
+    "pandas>=3.0.3",
+    "tau-bench",
+]
+
+[tool.uv.sources]
+tau-bench = { git = "https://github.com/sierra-research/tau-bench.git" }
