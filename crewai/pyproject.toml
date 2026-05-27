@@ -7,6 +7,7 @@ dependencies = [
     "crewai>=1.14.5",
     "openai>=2.38.0",
     "pandas>=3.0.3",
+    "tqdm>=4.67.0",
     "tau-bench",
 ]
 

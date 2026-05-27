@@ -6,6 +6,8 @@ import os
 import traceback
 from datetime import datetime
 
+from tqdm import tqdm
+
 from tau_bench.envs import get_env
 from tau_bench.types import EnvRunResult
 
@@ -61,8 +63,10 @@ def run_benchmark(
 
     all_metrics: list[dict] = []
     all_results: list[dict] = []
+    pass_count = 0
 
-    for idx in idxs:
+    pbar = tqdm(idxs, desc=FRAMEWORK, unit="task")
+    for idx in pbar:
         isolated_env = get_env(
             env_name,
             user_strategy="llm",
@@ -72,7 +76,6 @@ def run_benchmark(
             task_index=idx,
         )
 
-        print(f"\nTask {idx}...")
         try:
             with Timer() as timer:
                 result = agent.solve(env=isolated_env, task_index=idx)
@@ -87,11 +90,16 @@ def run_benchmark(
                 num_steps=len([m for m in result.messages if m.get("role") == "assistant"]),
                 info=result.info,
             )
-            status = "PASS" if result.reward >= 1.0 - 1e-6 else "FAIL"
-            print(f"  [{status}] reward={result.reward:.2f} "
-                  f"tokens={metrics.total_tokens} time={timer.elapsed:.1f}s")
+            passed = result.reward >= 1.0 - 1e-6
+            status = "PASS" if passed else "FAIL"
+            if passed:
+                pass_count += 1
+            tqdm.write(f"Task {idx:>3} [{status}] reward={result.reward:.2f} "
+                       f"tokens={metrics.total_tokens} time={timer.elapsed:.1f}s")
+            done = len(all_metrics) + 1
+            pbar.set_postfix(passed=f"{pass_count}/{done}")
         except Exception as e:
-            print(f"  [ERROR] {e}")
+            tqdm.write(f"Task {idx:>3} [ERROR] {e}")
             traceback.print_exc()
             metrics = TaskMetrics(task_id=idx, reward=0.0, info={"error": str(e)})
             result = None
