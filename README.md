@@ -74,30 +74,6 @@
     └── src/{agent.py, metrics.py}
 ```
 
-### 為什麼採用獨立子專案（separate `pyproject.toml`）？
-
-`agent-framework`（MAF）與 `crewai` 對 `opentelemetry-api` 的版本需求互相衝突
-（MAF 需 `>=1.39.0`，CrewAI 需 `>=1.34.0,<1.35`），無法安裝於同一環境，
-因此每個框架各自擁有獨立的 `uv` 虛擬環境與依賴。
-
----
-
-## 運作原理
-
-三個框架都實作 tau-bench 的 `Agent` 基底類別，核心是 `solve(env, task_index, max_num_steps)`：
-
-1. `env.reset(task_index)` → 取得第一句使用者訊息
-2. 進入迴圈：呼叫 LLM →
-   - 若 LLM 回傳 **tool call** → 透過 `env.step(Action(name, kwargs))` 執行工具，將結果回填對話
-   - 若 LLM 回傳 **純文字** → 透過 `env.step(Action("respond", {"content": ...}))` 傳給使用者，user simulator（`gpt-4o-mini`）生成回覆
-3. 當 `env.step()` 回傳 `done=True` 時結束，由 tau-bench 自動評分（reward 0 或 1）
-
-每個框架的差異在於「如何呼叫 LLM 與解析 tool call」：
-
-- **LangGraph**：`bind_tools(parallel_tool_calls=False)`，每輪只取第一個 tool call。
-- **MAF**：`FunctionTool` 採**宣告式**（不提供 `func`），避免 MAF 自動執行工具導致重複 API 呼叫；由我們手動路由到 `env.step()`。
-- **CrewAI**：因 Crew/Task 抽象不支援多輪互動對話，改用其底層 `litellm.completion()` 直接控制 tool-calling 迴圈。
-
 ---
 
 ## 執行方式
