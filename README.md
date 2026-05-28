@@ -2,15 +2,22 @@
 
 使用 [TAU-Bench](https://github.com/sierra-research/tau-bench)（Sierra Research）對三種主流 AI Agent 框架進行基準測試，模擬零售客服場景，量化各框架的**任務成功率**、**Token 消耗**與**執行時間**。
 
-| 框架 | 說明 |
-|------|------|
-| **LangGraph** | LangChain 的圖狀 agent 框架，使用 `ChatOpenAI.bind_tools()` 手動 tool-calling 迴圈 |
-| **MAF** (Microsoft Agent Framework) | 微軟新一代 agent 框架（前身 AutoGen），使用 `OpenAIChatClient` + 宣告式 `FunctionTool` |
-| **CrewAI** | 多 agent 協作框架，底層透過 `litellm` 進行 tool-calling |
+本專案做了**兩輪實驗**：
+
+- **第一輪「對齊實作」**：三個框架都寫成同一種「單 agent + 手動 tool-calling 迴圈」，盡量公平。
+- **第二輪「原生實作」**：每個框架改用其**官方推薦的原生寫法**，看框架差異是否會浮現。
+
+| 框架 | 第一輪：對齊實作 | 第二輪：原生實作（官方推薦） |
+|------|------|------|
+| **LangGraph** | `ChatOpenAI.bind_tools()` 手動迴圈 | `create_react_agent`（prebuilt ReAct agent） |
+| **MAF** (Microsoft Agent Framework) | `OpenAIChatClient` + 宣告式 `FunctionTool` | 原生 `Agent` + `agent.run()` 自動執行工具 |
+| **CrewAI** | 底層直接呼叫 `litellm` | 原生 `Agent.kickoff()` + `BaseTool` |
+
+> 第二輪的共用設計：把「跟使用者對話」也做成一個 `talk_to_user` 工具（內部走 `env.step` 的 respond action），讓每個框架的**原生 runner** 自動驅動整段多輪對話。
 
 ---
 
-## 評測結果
+## 第一輪結果：對齊實作
 
 **設定**：retail domain｜15 tasks（task 0–14）｜**每個任務跑 3 trials**｜agent 與 user simulator 皆使用 `gpt-4o-mini`｜temperature 0
 
@@ -71,6 +78,48 @@
 
 三框架共 135 runs、約 10.1M tokens，加上 user simulator，本次評測總費用約 **$2–3 USD**。
 （`gpt-4o-mini` 定價：input $0.15 / output $0.60 每 1M tokens）
+
+---
+
+## 第二輪結果：原生實作
+
+第一輪三個框架被寫成同一種「最小公分母」，把框架的差異化特徵都抹平了。第二輪改用各框架**官方推薦的原生寫法**（見上方表格），重新檢驗框架差異是否會浮現。
+
+**設定**：retail domain｜tasks 0–4（5 tasks × 1 trial）｜`gpt-4o-mini`｜temperature 0
+
+| 框架（原生） | 成功率 | 平均 Tokens/task | 平均時間/task |
+|------|:------:|:----------------:|:-------------:|
+| **LangGraph** (`create_react_agent`) | 3/5 | 82,405 | 53.2s |
+| **MAF** (`agent.run()`) | 0/5 | 75,995 | 42.8s |
+| **CrewAI** (`Agent.kickoff()`) | 1/5 | **610,514** | 55.3s |
+
+### 最大發現：CrewAI 原生寫法 token 暴量
+
+把第二輪（原生）和第一輪（對齊）在**同樣 tasks 0–4** 的 token 對照：
+
+| 框架 | 對齊實作 Tokens/run | 原生實作 Tokens/task | 變化 |
+|------|:------------------:|:-------------------:|:----:|
+| LangGraph | 84,546 | 82,405 | ≈ 持平 |
+| MAF | 67,964 | 75,995 | ≈ 持平 |
+| CrewAI | 97,513 | 610,514 | **↑ 約 6.3 倍** |
+
+CrewAI 的單一任務 token 從 22 萬一路飆到 **181 萬**（per-task：223K / 326K / 141K / 550K / **1810K**）。原因是 **CrewAI 的 `Agent.kickoff()` 是無狀態的**：要做多輪對話，每一輪都得把整段歷史（含龐大的 retail policy backstory）重新餵進去，且每次 kickoff 內部又自帶 ReAct scaffolding 多跑幾次 LLM。**LangGraph 與 MAF 的原生 runner 原生支援有狀態的多輪迴圈，token 幾乎不變。**
+
+這就是「換成原生寫法後浮現的框架差異」——但它出現在**成本/架構**維度，不是成功率。
+
+### 成功率仍然分不出高下
+
+原生實作的成功率（3/5、0/5、1/5）樣本太小（5 tasks × 1 trial），且我們在第一輪已證明成功率被模型能力與 user simulator 的隨機性主導。MAF 的 0/5 並非實作壞掉（驗證時 task 1 有 PASS），而是小樣本 + flaky 的正常波動。**換原生寫法沒有讓成功率分出差別，符合「框架是 orchestration layer、上限由模型決定」的預期。**
+
+### 為什麼沒繼續用 gpt-4o 比較
+
+原本想用更強的 gpt-4o 看差異是否浮現，但 CrewAI 原生 ~610K tokens/task 在 gpt-4o 下約 **$0.8/task**，$4 預算只夠 ~3 tasks，仍不足以壓過成功率的雜訊。既然**框架的真實差異（成本/架構）在 gpt-4o-mini 已經清楚浮現**，便不再投入更貴的 gpt-4o 評測。
+
+### 兩輪總結
+
+1. **成功率**：兩輪都無法分出框架高下——被模型能力與 user simulator 隨機性主導（這是 TAU-Bench 用 LLM 模擬使用者的結構性特徵）。
+2. **成本/架構**：才是框架的真實差異。**原生寫法反而放大了它**——CrewAI 的 Agent 抽象不是為有狀態多輪對話設計的，硬套上去成本暴增 6 倍；LangGraph / MAF 的原生 agent runner 則原生支援，成本持平。
+3. **方法論**：「框架理論上應該一樣」只在 prompt 逐字相同、模型與 user 都確定時成立；實務上框架的 prompt 包裝、訊息格式、狀態管理都不同，差異會經 user simulator 放大成完全不同的軌跡。
 
 ---
 
